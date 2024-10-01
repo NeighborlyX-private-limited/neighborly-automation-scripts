@@ -1,0 +1,4 @@
+database:
+  url: mongodb+srv://neighborlysocialapp:cluster01@cluster0.cncxy2q.mongodb.net/
+  name: Neighborly-production
+  collection: users
