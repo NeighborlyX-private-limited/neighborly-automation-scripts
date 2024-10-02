@@ -2,24 +2,15 @@ import pymongo
 import random
 from bson.objectid import ObjectId
 
-import yaml
-
-# Load YAML file
-with open('./config/config.yml', 'r') as file:
-    config = yaml.safe_load(file)
-
-dbUrl = config['database']['url']
-dbName = config['database']['name']
-dbCollection = config['database']['collection']
-
 # Connect to the MongoDB server
-client = pymongo.MongoClient(dbUrl)
+client = pymongo.MongoClient(
+    "mongodb+srv://neighborlysocialapp:cluster01@cluster0.cncxy2q.mongodb.net/")
 
 # Access a specific database
-db = client[dbName]
+db = client["Neighborly-production"]
 
 # Access a specific collection (similar to a table in SQL)
-collection = db[dbCollection]
+collection = db["users"]
 
 # Query all documents
 results = collection.find()
