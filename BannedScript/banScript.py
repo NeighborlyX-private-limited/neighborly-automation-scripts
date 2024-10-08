@@ -36,10 +36,14 @@ if user is None:
     print("No such username exist")
 
 else :
+    collection.update_one(
+        {"_id": user['_id']},
+        {"$set": {"isBanned": True}}
+    )
     payload = {
-        "token": user.fcmToken,
+        "token": user['fcmToken'],
         "eventType": "User Trigger",
-        "userid": user._id,
+        "userid": user['_id'],
         "title": "Your id is banned",
         "content": "We are banning you for wrong or invalid content",
         "notificationBody": "You are banned for wrong or bad content",
