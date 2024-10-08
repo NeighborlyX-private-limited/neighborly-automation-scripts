@@ -1,4 +1,0 @@
-dnspython==2.6.1
-psycopg2==2.9.9
-pymongo==4.9.1
-PyYAML==6.0.2
