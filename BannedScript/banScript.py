@@ -1,28 +1,30 @@
 import yaml
 import pymongo
 import requests
+import sys
 
 # Load YAML file
 with open('./config/config.yml', 'r') as file:
     config = yaml.safe_load(file)
 
-authToken = input("Please provide your token: ")
-username = input("Please enter username to whom you want to ban: ")
+authToken = sys.argv[1]
+username = sys.argv[2]
 
-dbUrl = config['database']['url']
-dbName = config['database']['name']
-dbCollection = config['database']['collection']
+DB_URL = config['database']['url']
+DB_NAME = config['database']['name']
+DB_COLLECTION = config['database']['collection']
+URI = config['API']['uri']
 
 # Connect to the MongoDB server
-client = pymongo.MongoClient(dbUrl)
+client = pymongo.MongoClient(DB_URL)
 
 # Access a specific database
-db = client[dbName]
+db = client[DB_NAME]
 
 # Access a specific collection (similar to a table in SQL)
-collection = db[dbCollection]
+collection = db[DB_COLLECTION]
 
-uri = config['API']['uri']
+
 
 headers = {
     "Accept": "application/json, text/plain, */*",
@@ -44,13 +46,13 @@ else :
         "token": user['fcmToken'],
         "eventType": "User Trigger",
         "userid": user['_id'],
-        "title": "Your id is banned",
-        "content": "We are banning you for wrong or invalid content",
-        "notificationBody": "You are banned for wrong or bad content",
-        "notificationTitle": "You are banned"
+        "title": "Rule-Breaking? Not Cool!",
+        "content": "Hey, we love your enthusiasm, but not your recent posts. You're banned for rule-breaking. Let’s keep it clean next time!",
+        "notificationBody": "You’ve been banned for breaking our rules. Take a break and come back when you’re ready to behave!",
+        "notificationTitle": "Ban Hammer Time!"
     }
     # Make the POST request
-    response = requests.post(uri, json=payload, headers=headers)
+    response = requests.post(URI, json=payload, headers=headers)
     # Check the response status and handle the response data
     if response.status_code == 200:
     # Parse JSON response data
