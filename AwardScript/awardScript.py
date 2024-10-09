@@ -8,18 +8,18 @@ import yaml
 with open('./config/config.yml', 'r') as file:
     config = yaml.safe_load(file)
 
-dbUrl = config['database']['url']
-dbName = config['database']['name']
-dbCollection = config['database']['collection']
+DB_URL = config['database']['url']
+DB_NAME = config['database']['name']
+DB_COLLECTION = config['database']['collection']
 
 # Connect to the MongoDB server
-client = pymongo.MongoClient(dbUrl)
+client = pymongo.MongoClient(DB_URL)
 
 # Access a specific database
-db = client[dbName]
+db = client[DB_NAME]
 
 # Access a specific collection (similar to a table in SQL)
-collection = db[dbCollection]
+collection = db[DB_COLLECTION]
 
 # Query all documents
 results = collection.find()
