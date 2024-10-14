@@ -58,5 +58,6 @@ else :
     # Parse JSON response data
         data = response.json()
         print(data)
+        print("userId: "+user['_id']+" is banned")
     else:
         print(f"Failed to post data. Status code: {response.status_code}")

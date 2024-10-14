@@ -46,49 +46,57 @@ cursor = conn.cursor()
 cursor.execute(f"SELECT voteid, contentid, votetype FROM {CONTENT_VOTES} WHERE processed=false;")
 rows = cursor.fetchall()
 for row in rows:
-    cursor.execute(f"SELECT userid FROM {CONTENTS} WHERE contentid = %s;", (row[1],))
-    userId = cursor.fetchone()
-    cursor.execute(
-    f"""
-    UPDATE {CONTENT_VOTES}
-    SET processed = true
-    WHERE voteid = %s
-    """,
-        (row[0],)
-    )
-    conn.commit()
-    if row[2] == 'cheer':
-        collection.update_one(
-            {"_id": ObjectId(userId[0])},
-            {"$inc": {"karma": 1}}
+    try:
+        cursor.execute(f"SELECT userid FROM {CONTENTS} WHERE contentid = %s;", (row[1],))
+        userId = cursor.fetchone()
+        cursor.execute(
+            f"""
+        UPDATE {CONTENT_VOTES}
+        SET processed = true
+        WHERE voteid = %s
+        """,
+            (row[0],)
         )
-    elif row[2] == 'boo':
-        collection.update_one(
-            {"_id": ObjectId(userId[0])},
-            {"$inc": {"karma": -1}}
-        )
+        conn.commit()
+        if row[2] == 'cheer':
+            collection.update_one(
+                {"_id": ObjectId(userId[0])},
+                {"$inc": {"karma": 1}}
+            )
+        elif row[2] == 'boo':
+            collection.update_one(
+                {"_id": ObjectId(userId[0])},
+                {"$inc": {"karma": -1}}
+            )
+        print("According to content Karma updated for user", userId[0])
+    except:
+        print("Some thing wrong with content", row[1])
 
 cursor.execute(f"SELECT voteid, commentid, votetype FROM {COMMENT_VOTES} WHERE processed=false;")
 comment_rows = cursor.fetchall()
 for row in comment_rows:
-    cursor.execute(f"SELECT userid FROM {COMMENTS} WHERE commentid = %s;", (row[1],))
-    userId = cursor.fetchone()
-    cursor.execute(
-        f"""
-    UPDATE {COMMENT_VOTES}
-    SET processed = true
-    WHERE voteid = %s
-    """,
-        (row[0],)
-    )
-    conn.commit()
-    if row[2] == 'cheer':
-        collection.update_one(
-            {"_id": ObjectId(userId[0])},
-            {"$inc": {"karma": 1}}
+    try:
+        cursor.execute(f"SELECT userid FROM {COMMENTS} WHERE commentid = %s;", (row[1],))
+        userId = cursor.fetchone()
+        cursor.execute(
+            f"""
+        UPDATE {COMMENT_VOTES}
+        SET processed = true
+        WHERE voteid = %s
+        """,
+            (row[0],)
         )
-    elif row[2] == 'boo':
-        collection.update_one(
-            {"_id": ObjectId(userId[0])},
-            {"$inc": {"karma": -1}}
-        )
+        conn.commit()
+        if row[2] == 'cheer':
+            collection.update_one(
+                {"_id": ObjectId(userId[0])},
+                {"$inc": {"karma": 1}}
+            )
+        elif row[2] == 'boo':
+            collection.update_one(
+                {"_id": ObjectId(userId[0])},
+                {"$inc": {"karma": -1}}
+            )
+        print("According to comment Karma updated for user", userId[0])
+    except:
+        print("Some thing wrong with comment", row[1])
