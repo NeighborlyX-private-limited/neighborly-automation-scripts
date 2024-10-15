@@ -29,7 +29,7 @@ collection = db[DB_COLLECTION]
 headers = {
     "Accept": "application/json, text/plain, */*",
     "Content-Type": "application/json",
-    "authorization": "Bearer"+authToken
+    "authorization": "Bearer "+authToken
 }
 
 user = collection.find_one({"username": username})
@@ -42,22 +42,21 @@ else :
         {"_id": user['_id']},
         {"$set": {"isBanned": True}}
     )
-    payload = {
-        "token": user['fcmToken'],
-        "eventType": "User Trigger",
-        "userid": user['_id'],
-        "title": "Rule-Breaking? Not Cool!",
-        "content": "Hey, we love your enthusiasm, but not your recent posts. You're banned for rule-breaking. Let’s keep it clean next time!",
-        "notificationBody": "You’ve been banned for breaking our rules. Take a break and come back when you’re ready to behave!",
-        "notificationTitle": "Ban Hammer Time!"
-    }
-    # Make the POST request
-    response = requests.post(URI, json=payload, headers=headers)
-    # Check the response status and handle the response data
-    if response.status_code == 200:
-    # Parse JSON response data
-        data = response.json()
-        print(data)
-        print("userId: "+user['_id']+" is banned")
-    else:
-        print(f"Failed to post data. Status code: {response.status_code}")
+    try:
+        payload = {
+            "userId": str(user['_id']),
+            "title": "Rule-Breaking? Not Cool!",
+            "content": "Hey, we love your enthusiasm, but not your recent posts. You're banned for rule-breaking. Let’s keep it clean next time!"
+        }
+        # Make the POST request
+        response = requests.post(URI, json=payload, headers=headers)
+        # Check the response status and handle the response data
+        if response.status_code == 200:
+            # Parse JSON response data
+            data = response.json()
+            print(data)
+            print("userId: "+str(user['_id'])+" is banned")
+        else:
+            print(f"Failed to post data. Status code: {response.status_code}")
+    except:
+        print("Updated the Database but not able to send notification!")
