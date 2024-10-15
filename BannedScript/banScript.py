@@ -2,6 +2,7 @@ import yaml
 import pymongo
 import requests
 import sys
+from datetime import datetime, timedelta
 
 # Load YAML file
 with open('./config/config.yml', 'r') as file:
@@ -38,9 +39,11 @@ if user is None:
     print("No such username exist")
 
 else :
+    now = datetime.now()
+    seven_days_later = now + timedelta(days=7)
     collection.update_one(
         {"_id": user['_id']},
-        {"$set": {"isBanned": True}}
+        {"$set": {"isBanned": True, "bannedExpiry": seven_days_later}}
     )
     try:
         payload = {
