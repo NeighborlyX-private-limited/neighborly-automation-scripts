@@ -10,6 +10,7 @@ with open('./config/config.yml', 'r') as file:
 
 authToken = sys.argv[1]
 username = sys.argv[2]
+banDays = sys.argv[3]
 
 DB_URL = config['database']['url']
 DB_NAME = config['database']['name']
@@ -40,10 +41,10 @@ if user is None:
 
 else :
     now = datetime.now()
-    seven_days_later = now + timedelta(days=7)
+    days_later = now + timedelta(days=banDays)
     collection.update_one(
         {"_id": user['_id']},
-        {"$set": {"isBanned": True, "bannedExpiry": seven_days_later}}
+        {"$set": {"isBanned": True, "bannedExpiry": days_later}}
     )
     try:
         payload = {
