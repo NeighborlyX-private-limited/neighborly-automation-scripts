@@ -1,5 +1,7 @@
 import psycopg2
 import os
+import schedule
+import time
 from datetime import datetime
 import logging
 from dotenv import load_dotenv
@@ -27,7 +29,7 @@ DB_CONFIG = {
 REPORT_THRESHOLD = 6
 
 def connect_to_db():
-    """Establish a database connection."""
+
     try:
         logging.info("Connecting to the database...")
         conn = psycopg2.connect(
@@ -44,7 +46,6 @@ def connect_to_db():
         raise
 
 def check_reported_posts():
-    """Check posts with reports exceeding the threshold and handle quarantine."""
     conn = None
     cur = None
     try:
@@ -116,10 +117,6 @@ def check_reported_posts():
             conn.close()
 
 def process_moderation_action(content_id, action="unquarantine"):
-    """
-    Handle moderation actions like unquarantining posts.
-    Marks all reports for the post as processed.
-    """
     conn = None
     cur = None
     try:
@@ -156,18 +153,29 @@ def process_moderation_action(content_id, action="unquarantine"):
         if conn:
             conn.close()
 
-def main():
-    """Main function to run the script."""
+def run_report_checker():
+
     script_start_time = datetime.now()
-    logging.info(f"Starting report checker at {script_start_time}")
+    logging.info(f"Scheduled report checker starting at {script_start_time}")
 
     try:
         check_reported_posts()
         script_end_time = datetime.now()
         execution_time = (script_end_time - script_start_time).total_seconds()
-        logging.info(f"Report checker completed in {execution_time:.2f} seconds.")
+        logging.info(f"Scheduled report checker completed in {execution_time:.2f} seconds.")
     except Exception as e:
-        logging.error(f"Report checker failed: {str(e)}")
+        logging.error(f"Scheduled report checker failed: {str(e)}")
+
+def main():
+   
+    schedule.every(1).hour.do(run_report_checker)
+    
+    logging.info("Scheduler initialized. Waiting for scheduled tasks...")
+    
+  
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
 
 if __name__ == "__main__":
     main()
