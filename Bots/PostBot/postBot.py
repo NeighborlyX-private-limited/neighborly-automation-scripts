@@ -15,13 +15,11 @@ class PostBot:
         self.OpenAIclient = None
         self.accessToken = None
         self.refreshToken = None
-
-        # When the bot is initialized.
-        #It will automatically login to the backend API.
-        self.loginBot()
+        self.postCreated = 0
+        self.unsuccessfulAttempts = 0
 
     # Login with environment saved credentials to interact with the Backend API.
-    def loginBot(self):
+    def login(self):
         try:
             emails = os.getenv("EMAILS").split("|")
             passwords = os.getenv("PASSWORDS").split("|")
@@ -35,7 +33,7 @@ class PostBot:
             idx = random.randint(0, emailsLength - 1)
             botUserId, botPassword = emails[idx], passwords[idx]
 
-            url = os.getenv("LOCAL_URL") + os.getenv("LOGIN_ENDPOINT")
+            url = os.getenv("BASE_URL") + os.getenv("LOGIN_ENDPOINT")
             headers = {
                 "Content-Type": "application/json",
             }
@@ -61,14 +59,14 @@ class PostBot:
         if self.GeminiAI_api_key:
             self.GeminiAIclient = genai.Client(api_key=self.GeminiAI_api_key)
         else:
-            exit("Gemini API key not found. Please set the GEMINI_API_KEY environment variable.")
+            sys.exit("Gemini API key not found. Please set the GEMINI_API_KEY environment variable.")
     
     # OpenAI cleint
     def initialize_OpenAI_client(self):
         if self.OpenAI_api_key:
             self.OpenAIclient = OpenAI(api_key=self.OpenAI_api_key)
         else:
-            exit("Gemini API key not found. Please set the GEMINI_API_KEY environment variable.")
+            sys.exit("Gemini API key not found. Please set the GEMINI_API_KEY environment variable.")
 
     # select random address from the list of addresses.
     def selectAddress(self):
@@ -77,49 +75,54 @@ class PostBot:
 
     # method to get a random prompt from the templates.
     def selectPrompt(self):
-        self.selectAddress()
         topic = random.choice(list(templates.keys()))
         prompt = random.choice(templates[topic]).format(address=self.locationInfo.get("address"), society=self.locationInfo.get("society"), landmark=self.locationInfo.get("landmark"), city=self.locationInfo.get("city"))
         return prompt
 
     def generatePostByOpenAI(self, prompt):
-        # Check if the OpenAI client is initialized, if not, initialize it.
-        if not self.OpenAIclient:
-            self.initialize_OpenAI_client()
+        try:
+            # Check if the OpenAI client is initialized, if not, initialize it.
+            if not self.OpenAIclient:
+                self.initialize_OpenAI_client()
 
-        response = self.OpenAIclient.chat.completions.create(
-            model="gpt-4",
-            messages=[{
-                "role": "user", 
-                "content":f"""{prompt}
+            response = self.OpenAIclient.chat.completions.create(
+                model="gpt-4",
+                messages=[{
+                    "role": "user", 
+                    "content":f"""{prompt}
+                        
+                    Generate a response formatted as a JSON object adhering to the following structure.
+                    The JSON object must contain:
+                        - "type": A string, either "post" or "poll".
+                        - "title": A string representing the title of the post or poll.
+                        - "body": A string containing the text of the post or the poll question.
+                        - "options": An array of strings representing the poll options (only required if type is "poll", can be an empty array if type is "post").
                     
-                Generate a response formatted as a JSON object adhering to the following structure.
-                The JSON object must contain:
-                    - "type": A string, either "post" or "poll".
-                    - "title": A string representing the title of the post or poll.
-                    - "body": A string containing the text of the post or the poll question.
-                    - "options": An array of strings representing the poll options (only required if type is "poll", can be an empty array if type is "post").
-                
-                Example for a post:
-                post  = {{
-                "type": "post",
-                "title": "Exciting News!",
-                "body": "Just launched our new product! Check it out.",
-                "options": []
-                }}
+                    Example for a post:
+                    post  = {{
+                    "type": "post",
+                    "title": "Exciting News!",
+                    "body": "Just launched our new product! Check it out.",
+                    "options": []
+                    }}
 
-                Example for a poll:
-                post = {{
-                "type": "poll",
-                "title": "Favorite Season",
-                "body": "What's your favorite season?",
-                "options": ["Spring", "Summer", "Autumn", "Winter"]
-                }}
-                """}],
-            temperature=float(os.getenv("TEMPERATURE")),
-        ) 
-        post = json.loads(response.choices[0].message.content)
-        return post
+                    Example for a poll:
+                    post = {{
+                    "type": "poll",
+                    "title": "Favorite Season",
+                    "body": "What's your favorite season?",
+                    "options": ["Spring", "Summer", "Autumn", "Winter"]
+                    }}
+                    """}],
+                temperature=float(os.getenv("TEMPERATURE")),
+            ) 
+            post = json.loads(response.choices[0].message.content)
+            return post
+
+        except Exception as e:
+            bot.unsuccessfulAttempts += 1
+            print(f"Error generating post: {e}")
+            return None
 
     # method through which Bot interacts with OpenAI API.
     def generatePostByGeminiAI(self, prompt):
@@ -163,12 +166,13 @@ class PostBot:
             post = json.loads(response.text)
             return post
         except Exception as e:
+            bot.unsuccessfulAttempts += 1
             print(f"Error generating post: {e}")
             return None
     
     def savePost(self, post):   
         try:
-            url = os.getenv("LOCAL_URL") + os.getenv("CREATE_POST_ENDPOINT")
+            url = os.getenv("BASE_URL") + os.getenv("CREATE_POST_ENDPOINT")
 
             headers = {
                 "Content-Type": "application/json",
@@ -193,23 +197,43 @@ class PostBot:
 
             if response.status_code == 200:
                 result = response.json()
-                print(result)
+                bot.postCreated += 1
+                print("Post Created with contentid = ",result.get("contentid"))
 
             else:
                 raise Exception(f"Post save failed with status code: {response.status_code}")
 
         except Exception as e:
             print(f"Error saving post: {e}")
+            bot.unsuccessfulAttempts += 1
+        
+        finally:
+            self.refreshToken = None
+            self.accessToken = None
+            self.locationInfo = None
 
 
 if __name__ == "__main__":
     bot = PostBot()
-    prompt = bot.selectPrompt()
-    post = None
-    if os.getenv("TO_USE") == "OpenAI":
-        post = bot.generatePostByOpenAI(prompt)
-    else:
-        post = bot.generatePostByGeminiAI(prompt)
-    bot.savePost(post)
+    postCreated = 0
+    unsuccessfulAttempts = 0
+    SeedPostNeeded = random.randint(1, 15)
+
+    for i in range(SeedPostNeeded):
+        bot.login()
+        bot.selectAddress()
+        prompt = bot.selectPrompt()
+        post = None
+        if os.getenv("TO_USE") == "OpenAI":
+            post = bot.generatePostByOpenAI(prompt)
+        else:
+            post = bot.generatePostByGeminiAI(prompt)
+        if post:
+            bot.savePost(post)
+
+    print(f"Total Posts Created = {bot.postCreated}")
+    print(f"Unsuccessful Attempts = {bot.unsuccessfulAttempts}")
+
+    del bot
 
 
