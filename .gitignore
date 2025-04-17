@@ -1,3 +1,5 @@
 AwardScript/config/
 KarmaScript/config/
 BannedScript/config/
+Bots/config.env
+Bots/PostBot/__pycache__
