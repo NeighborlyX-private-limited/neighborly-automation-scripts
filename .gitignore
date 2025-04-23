@@ -3,3 +3,5 @@ KarmaScript/config/
 BannedScript/config/
 Bots/config.env
 Bots/PostBot/__pycache__
+InviteCodeScript/node_modules
+InviteCodeScript/config.env
