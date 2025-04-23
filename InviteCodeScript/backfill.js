@@ -2,17 +2,14 @@ const dotenv = require("dotenv")
 const User = require("./UserModel")
 const { connect, disconnect } = require("./utils/database")
 const { generateInviteCode } = require("./utils/InviteCodeGenerator")
+const { activityLogger, errorLogger } = require("./utils/logger")
 
 dotenv.config({ path: "./config.env" });
 
 const backFillInviteCode = async() => {
     try {
-        console.log(`Connecting to Mongo DB.`)
-        const isConnected = await connect(3)
-
-        if(!isConnected) {
-            process.exit(1)
-        }
+        activityLogger.info(`Connecting to Mongo DB.`)
+        await connect(3)
 
         const usersToBackfill = await User.find({ 
             inviteCode: { $exists: false } 
@@ -20,10 +17,10 @@ const backFillInviteCode = async() => {
         .select("username")
         .lean()
 
-        console.log(`Found ${usersToBackfill.length} users to add invite code.`)
+        activityLogger.info(`Found ${usersToBackfill.length} users to add invite`)
 
         if (usersToBackfill.length > 0) {
-            console.log(`Starting backfilling invite code.`)
+            activityLogger.info(`Starting backfilling invite code.`)
 
             await Promise.all(
                 usersToBackfill.map(async(user) => {
@@ -40,23 +37,28 @@ const backFillInviteCode = async() => {
                                 { $set: { inviteCode : inviteCode } }
                             )
                         }
-                        console.log(`Unique invite code found and updated for user: ${user.username} after attempts: ${attempts}`)
+                        
+                        activityLogger.info(`Unique invite code found and updated for user: ${user.username} after attempts: ${attempts}`)
                     }
                     catch(error) {
-                        console.log(`Encountered error while updating invite code for user: ${user.username}`)
-                        console.log(error)
+                        activityLogger.info(`Encountered error while updating invite code for user: ${user.username}`, error)
                     }
                 })
             )
             console.log(`Ended backfilling.`)
         }
-        console.log(`Disconnecting Database.`)
+        activityLogger.info(`Disconnecting Database.`)
     }
     catch(error) {
-        console.log("An error occured while backfilling", error)
+        errorLogger.error(`Error occured while backfilling`,error)
     }
     finally {
-        await disconnect(3)
+        const isDiconnected = await disconnect(3)
+
+        if (!isDiconnected) {
+            errorLogger.error(`Mongo Disconnection failed.Explicitly exiting script.`)
+            process.exit(1)
+        }
     }
 }
 

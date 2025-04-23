@@ -1,38 +1,35 @@
 const { mongoose } = require("mongoose")
+const { activityLogger, errorLogger } = require("./logger")
 
 const connect = async(retryCount) => {
     try {
         await mongoose.connect(process.env.DB_URI)
-        console.log("Mongo DB connected successfully.")
-        return true
+        activityLogger.info(`Mongo DB connected successfully.`)
     }
     catch(error) {
-        console.log("An error occured: ",error)
+        activityLogger.info(`Error occured while connecting to Mongo DB: `)
         if (retryCount > 0) {
-            console.log("Re-trying to connect.")
+            activityLogger.info(`Re-trying to connect.`)
             return await connect(retryCount - 1)
         }
-        else {
-            console.log("Connection failed! Retry limit exceeded.")
-            return false
-        }
+        return error
     }
 }
 
 const disconnect = async(retryCount) => {
     try {
         await mongoose.disconnect()
-        console.log("All connection to Mongo DB are successfully closed.")
+        activityLogger.info(`All connection to Mongo DB are successfully disconneted.`)
+        return true
     }
     catch(error) {
-        console.log("An error occured: ",error)
+        activityLogger.info(`Error occured while disconnecting to Mongo DB: `)
         if (retryCount > 0) {
-            console.log("Re-trying to Disconnect.")
-            await connect(retryCount - 1)
+            activityLogger.info(`Re-trying to disconnect.`)
+            return await connect(retryCount - 1)
         }
-        else {
-            console.log("Failed to Disconnect! Retry limit exceeded.")
-        }
+        errorLogger.error(`Error while disconnecting Mongo connection: `,error)
+        return false
     }
 }
 
