@@ -1,5 +1,6 @@
 const { mongoose } = require("mongoose")
 const { activityLogger, errorLogger } = require("./logger")
+const { Pool } = require("pg")
 
 const connect = async(retryCount) => {
     try {
@@ -33,6 +34,22 @@ const disconnect = async(retryCount) => {
     }
 }
 
+console.log ({
+    user: process.env.PG_USERNAME,
+    host: process.env.PG_HOSTNAME,
+    password: process.env.PG_PASSWORD,
+    port: process.env.PG_PORT,
+    database: process.env.PG_DATABASE
+})
+
+const pool = new Pool({
+    user: process.env.PG_USERNAME,
+    host: process.env.PG_HOSTNAME,
+    password: process.env.PG_PASSWORD,
+    port: process.env.PG_PORT,
+    database: process.env.PG_DATABASE
+})
+
 module.exports = {
-    connect, disconnect
+    connect, disconnect, pool
 }

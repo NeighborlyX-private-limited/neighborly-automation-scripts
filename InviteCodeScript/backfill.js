@@ -1,10 +1,10 @@
 const dotenv = require("dotenv")
+dotenv.config({ path: "./config.env" }); // Don't change sequence of imports
+const { connect, disconnect, pool } = require("./utils/database")
 const User = require("./UserModel")
-const { connect, disconnect } = require("./utils/database")
 const { generateInviteCode } = require("./utils/InviteCodeGenerator")
 const { activityLogger, errorLogger } = require("./utils/logger")
 
-dotenv.config({ path: "./config.env" });
 
 const backFillInviteCode = async() => {
     try {
@@ -12,7 +12,7 @@ const backFillInviteCode = async() => {
         await connect(3)
 
         const usersToBackfill = await User.find({ 
-            inviteCode: { $exists: false } 
+            isDeleted: false
         })
         .select("username")
         .lean()
@@ -36,6 +36,17 @@ const backFillInviteCode = async() => {
                                 { _id : user._id },
                                 { $set: { inviteCode : inviteCode } }
                             )
+                                
+                            await pool.query(
+                                `INSERT INTO referrals (
+                                referee_user_id,
+                                referee_reward_eligibility,
+                                "createdAt",
+                                "updatedAt"
+                                )
+                                VALUES ($1, $2, $3, $4);`, 
+                                [user._id.toString(), false, new Date(), new Date()]
+                            )
                         }
                         
                         activityLogger.info(`Unique invite code found and updated for user: ${user.username} after attempts: ${attempts}`)
@@ -45,7 +56,6 @@ const backFillInviteCode = async() => {
                     }
                 })
             )
-            console.log(`Ended backfilling.`)
         }
         activityLogger.info(`Disconnecting Database.`)
     }
