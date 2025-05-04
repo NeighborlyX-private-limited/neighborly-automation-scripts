@@ -175,7 +175,7 @@ class PostBot:
             url = os.getenv("BASE_URL") + os.getenv("CREATE_POST_ENDPOINT")
 
             headers = {
-                "Content-Type": "application/json",
+                "Content-Type": "application/x-www-form-urlencoded",
                 "Authorization": f"Bearer {self.accessToken}",
             }
 
@@ -193,7 +193,7 @@ class PostBot:
                 'refreshToken': self.refreshToken
             }
 
-            response = requests.post(url, data = payload, cookies = cookies)
+            response = requests.post(url, headers = headers, data = payload, cookies = cookies)
 
             if response.status_code == 200:
                 result = response.json()
@@ -205,7 +205,7 @@ class PostBot:
 
         except Exception as e:
             print(f"Error saving post: {e}")
-            bot.unsuccessfulAttempts += 1
+            self.unsuccessfulAttempts += 1
         
         finally:
             self.refreshToken = None
