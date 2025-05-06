@@ -2,7 +2,7 @@ const dotenv = require("dotenv")
 dotenv.config({ path: "./config.env" }); // Don't change sequence of imports
 const { connect, disconnect, pool } = require("./utils/database")
 const User = require("./UserModel")
-const { generateInviteCode } = require("./utils/InviteCodeGenerator")
+const { generateCode } = require("./utils/CodeGenerator")
 const { activityLogger, errorLogger } = require("./utils/logger")
 
 
@@ -28,7 +28,7 @@ const backFillInviteCode = async() => {
                         let inviteCode, inviteCodeExists, attempts = 0
                         do {
                             attempts += 1
-                            inviteCode = generateInviteCode()
+                            inviteCode = generateCode()
                             inviteCodeExists = await User.exists({ inviteCode: inviteCode })
                         }
                         while(inviteCodeExists) {
