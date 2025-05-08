@@ -4,3 +4,6 @@ BannedScript/config/
 Bots/config.env
 Bots/PostBot/__pycache__
 Bots/CommentBot/__pycache__
+InviteCodeScript/node_modules
+InviteCodeScript/config.env
+InviteCodeScript/logs
