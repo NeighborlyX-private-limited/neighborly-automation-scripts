@@ -12,7 +12,8 @@ const backFillInviteCode = async() => {
         await connect(3)
 
         const usersToBackfill = await User.find({ 
-            isDeleted: false
+            isDeleted: false,
+            inviteCode: { $exists: false },
         })
         .select("username")
         .lean()
