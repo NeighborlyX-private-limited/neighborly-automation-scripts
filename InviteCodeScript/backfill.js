@@ -26,31 +26,28 @@ const backFillInviteCode = async() => {
             await Promise.all(
                 usersToBackfill.map(async(user) => {
                     try {
-                        let inviteCode, inviteCodeExists, attempts = 0
+                        let inviteCode, inviteCodeExists
                         do {
-                            attempts += 1
                             inviteCode = generateCode()
-                            inviteCodeExists = await User.exists({ inviteCode: inviteCode })
-                        }
-                        while(inviteCodeExists) {
-                            await User.updateOne(
-                                { _id : user._id },
-                                { $set: { inviteCode : inviteCode } }
-                            )
-                                
-                            await pool.query(
-                                `INSERT INTO referrals (
+                            inviteCodeExists = await User.exists({ inviteCode })
+                        } while (inviteCodeExists)
+                        await User.updateOne(
+                            { _id: user._id },
+                            { $set: { inviteCode } }
+                        )
+                        await pool.query(
+                            `INSERT INTO referrals (
                                 referee_user_id,
                                 referee_reward_eligibility,
                                 "createdAt",
                                 "updatedAt"
-                                )
-                                VALUES ($1, $2, $3, $4);`, 
-                                [user._id.toString(), false, new Date(), new Date()]
                             )
-                        }
+                            VALUES ($1, $2, $3, $4);`,
+                            [user._id.toString(), false, new Date(), new Date()]
+                        )
+
                         
-                        activityLogger.info(`Unique invite code found and updated for user: ${user.username} after attempts: ${attempts}`)
+                        activityLogger.info(`Unique invite code found and updated for user: ${user.username}.`)
                     }
                     catch(error) {
                         activityLogger.info(`Encountered error while updating invite code for user: ${user.username}`, error)
