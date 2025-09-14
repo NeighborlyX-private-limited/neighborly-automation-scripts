@@ -1,15 +1,14 @@
-# insights_worker/ai_processor.py
 import openai
 import json
 import logging
 import asyncio
 import aiohttp
+import ssl, certifi
 from typing import List, Dict, Optional
 from config import Config
 import re
 from datetime import datetime, timedelta
 import urllib.parse
-
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +37,6 @@ class AIProcessor:
         }
     
     async def generate_insights(self, location_slug: str, lat: float, lon: float) -> Optional[Dict]:
-        """Generate insights using OpenAI + Google Places + Reddit data"""
         try:
             logger.info(f"Starting AI insight generation for {location_slug}")
             
@@ -74,6 +72,7 @@ class AIProcessor:
         }
         
         try:
+            ssl_context = ssl.create_default_context(cafile=certifi.where())
             async with aiohttp.ClientSession() as session:
                 # Set headers to mimic a browser request
                 headers = {
@@ -85,7 +84,7 @@ class AIProcessor:
                     for query in queries:
                         # Create search query combining location and topic
                         search_query = f"{location_slug} {query}"
-                        task = self._search_reddit(session, search_query, category, headers)
+                        task = self._search_reddit(session, search_query, category, headers, ssl_context)
                         tasks.append(task)
                 
                 results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -101,14 +100,14 @@ class AIProcessor:
         
         return reddit_data
     
-    async def _search_reddit(self, session, query: str, category: str, headers: Dict) -> Optional[tuple]:
+    async def _search_reddit(self, session, query: str, category: str, headers: Dict, ssl_context) -> Optional[tuple]:
         """Search Reddit for specific query and category"""
         try:
             # Use Reddit's JSON API
             encoded_query = urllib.parse.quote(query)
             url = f"https://www.reddit.com/search.json?q={encoded_query}&sort=relevance&t=year&limit=10"
             
-            async with session.get(url, headers=headers) as response:
+            async with session.get(url, headers=headers, ssl=ssl_context) as response:
                 if response.status == 200:
                     data = await response.json()
                     
@@ -194,10 +193,11 @@ class AIProcessor:
         ]
         
         try:
+            ssl_context = ssl.create_default_context(cafile=certifi.where())
             async with aiohttp.ClientSession() as session:
                 tasks = []
                 for query_types, category in search_queries:
-                    task = self._search_google_places(session, lat, lon, query_types, category)
+                    task = self._search_google_places(session, lat, lon, query_types, category, ssl_context)
                     tasks.append(task)
                 
                 results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -213,7 +213,7 @@ class AIProcessor:
         return places_data
     
     async def _search_google_places(self, session, lat: float, lon: float, 
-                                  place_types: str, category: str) -> List[Dict]:
+                                  place_types: str, category: str, ssl_context) -> List[Dict]:
         """Search Google Places for specific types"""
         try:
             # Google Places Nearby Search API
@@ -226,7 +226,7 @@ class AIProcessor:
                 "key": self.config.GOOGLE_PLACES_API_KEY
             }
             
-            async with session.get(url, params=params) as response:
+            async with session.get(url, params=params, ssl=ssl_context) as response:
                 if response.status == 200:
                     data = await response.json()
                     
@@ -345,7 +345,7 @@ Generate a comprehensive JSON response with this structure:
       {{
         "title": "Restaurant/Food Place Name or insight from Reddit",
         "summary": "Brief description highlighting what makes it notable (cuisine, popularity, etc.) or community opinion",
-        "status_tag": "Popular" (for highly rated places with 100+ reviews or highly upvoted Reddit posts),
+        "status_tag": "Popular",
         "source_type": "ai"
       }}
     ],
@@ -392,24 +392,27 @@ IMPORTANT RULES:
 4. Focus on the most notable and highly-rated establishments or widely discussed topics
 5. Keep descriptions concise but informative
 6. Include empty arrays if no relevant data exists for a category
-7. When using Reddit insights, make them sound natural (don't mention "Reddit says" or "according to Reddit")
+7. When using Reddit insights, make them sound natural (don't mention \"Reddit says\" or \"according to Reddit\")
 8. Return ONLY valid JSON, no other text or formatting
 """
-
     async def _call_openai(self, prompt: str) -> Optional[str]:
         """Call OpenAI API with proper async handling"""
         try:
             # Use the newer OpenAI client for better async support
             client = openai.AsyncClient(api_key=self.config.OPENAI_API_KEY)
             
+            # MUST instruct model to return JSON when using response_format json_object
             response = await client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
                     {
                         "role": "system", 
-                        "content": "You are a local area expert who analyzes business data and community insights to provide accurate locality insights. You combine official business data with real community discussions to give comprehensive area analysis."
+                        "content": (
+                            "You are a local area expert who analyzes business data and community insights to provide accurate locality insights. "
+                            "Always respond ONLY in valid JSON format, nothing else."
+                        )
                     },
-                    {"role": "user", "content": prompt}
+                    {"role": "user", "content": prompt + "\n\nReturn output strictly in JSON format."}
                 ],
                 max_tokens=3000,  # Increased for more comprehensive responses
                 temperature=0.2,
