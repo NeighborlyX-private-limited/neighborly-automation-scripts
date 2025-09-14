@@ -4,6 +4,7 @@ import asyncio
 from typing import List, Dict, Optional
 from config import Config
 
+
 class DataCollector:
     def __init__(self):
         self.config = Config()
@@ -40,73 +41,83 @@ class DataCollector:
             # For now, return None and handle in main.py
             return None
     
-    async def get_nearby_posts(self, lat: float, lon: float, radius: int = 5000) -> List[Dict]:
-        """Fetch posts within radius of coordinates"""
+    async def get_custom_insights_by_location(self, location_slug: str) -> List[Dict]:
+        """Fetch existing custom insights for the location from insights table"""
         await self.init_db()
         
         async with self.pg_pool.acquire() as conn:
-            # Use the same ST_DWithin query as your wallController
+            # Query the insights table for user-generated insights
             query = """
-            SELECT contentid, userid, username, title, body, createdat, cheers, boos, 
-                   type, city, ST_X(postlocation) as lon, ST_Y(postlocation) as lat
-            FROM content 
+            SELECT i.id, i.location_slug, i.title, i.summary, i.cheers, i.boos, 
+                   i.status_tag, i.source_type, i.created_at, i.updated_at,
+                   ic.slug as category_slug, ic.name as category_name
+            FROM insights i
+            JOIN insight_categories ic ON i.category_id = ic.id
+            WHERE i.location_slug = $1 AND i.source_type = 'user'
+            ORDER BY i.created_at DESC
+            LIMIT 100
+            """
+            
+            rows = await conn.fetch(query, location_slug)
+            
+            return [
+                {
+                    "id": str(row['id']),
+                    "location_slug": row['location_slug'],
+                    "title": row['title'],
+                    "summary": row['summary'],
+                    "cheers": row['cheers'],
+                    "boos": row['boos'],
+                    "status_tag": row['status_tag'],
+                    "source_type": row['source_type'],
+                    "created_at": row['created_at'],
+                    "updated_at": row['updated_at'],
+                    "category_slug": row['category_slug'],
+                    "category_name": row['category_name']
+                } for row in rows
+            ]
+    
+    async def get_nearby_custom_insights(self, lat: float, lon: float, radius: int = 5000) -> List[Dict]:
+        """Fetch custom insights within radius of coordinates from insights table"""
+        await self.init_db()
+        
+        async with self.pg_pool.acquire() as conn:
+            # Get insights from nearby locations using location_summaries geometry
+            query = """
+            SELECT DISTINCT i.id, i.location_slug, i.title, i.summary, i.cheers, i.boos, 
+                   i.status_tag, i.source_type, i.created_at, i.updated_at,
+                   ic.slug as category_slug, ic.name as category_name,
+                   ST_X(ls.geom) as lon, ST_Y(ls.geom) as lat
+            FROM insights i
+            JOIN insight_categories ic ON i.category_id = ic.id
+            JOIN location_summaries ls ON i.location_slug = ls.location_slug
             WHERE ST_DWithin(
-                postlocation,
+                ls.geom,
                 ST_SetSRID(ST_Point($1, $2), 4326),
                 $3
-            ) AND quarantined = false
-            ORDER BY createdat DESC
-            LIMIT 200
+            ) AND i.source_type = 'user'
+            ORDER BY i.created_at DESC
+            LIMIT 50
             """
             
             rows = await conn.fetch(query, lon, lat, radius)
             
             return [
                 {
-                    "contentid": row['contentid'],
-                    "userid": row['userid'],
-                    "username": row['username'],
+                    "id": str(row['id']),
+                    "location_slug": row['location_slug'],
                     "title": row['title'],
-                    "body": row['body'],
-                    "createdat": row['createdat'],
+                    "summary": row['summary'],
                     "cheers": row['cheers'],
                     "boos": row['boos'],
-                    "type": row['type'],
-                    "city": row['city'],
+                    "status_tag": row['status_tag'],
+                    "source_type": row['source_type'],
+                    "created_at": row['created_at'],
+                    "updated_at": row['updated_at'],
+                    "category_slug": row['category_slug'],
+                    "category_name": row['category_name'],
                     "lat": row['lat'],
                     "lon": row['lon']
-                } for row in rows
-            ]
-    
-    async def get_comments_for_posts(self, posts: List[Dict]) -> List[Dict]:
-        """Get comments for the collected posts"""
-        if not posts:
-            return []
-            
-        await self.init_db()
-        post_ids = [post['contentid'] for post in posts]
-        
-        async with self.pg_pool.acquire() as conn:
-            query = """
-            SELECT commentid, contentid, userid, username, body, createdat, cheers, boos
-            FROM comments 
-            WHERE contentid = ANY($1)
-            ORDER BY createdat DESC
-            LIMIT 500
-            """
-            
-            rows = await conn.fetch(query, post_ids)
-            
-            return [
-                {
-                    "commentid": row['commentid'],
-                    "contentid": row['contentid'],
-                    "userid": row['userid'],
-                    "username": row['username'],
-                    "body": row['body'],
-                    "createdat": row['createdat'],
-                    "cheers": row['cheers'],
-                    "boos": row['boos']
                 } for row in rows
             ]
     

@@ -1,17 +1,16 @@
-# insights_worker/main.py
-
 import sys
 import asyncio
 import requests
 import json
 import logging
-import uuid
 import re
 from ai_processor import AIProcessor
 from config import Config
 
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def clean_text(text):
     """Clean text by removing emojis, unicode characters, and normalizing"""
@@ -51,16 +50,6 @@ def clean_text(text):
     # Ensure we return ASCII-safe string
     return cleaned.encode('ascii', 'ignore').decode('ascii').strip() if cleaned.strip() else None
 
-def get_categories_map(callback_url):
-    """Fetch category slug to UUID mapping from backend"""
-    try:
-        response = requests.get(f"{callback_url}/insights/categories", timeout=10)
-        if response.status_code == 200:
-            categories = response.json()
-            return {cat['slug']: cat['id'] for cat in categories}
-    except Exception as e:
-        logger.error(f"Failed to fetch categories: {e}")
-    return {}
 
 async def generate_insights_for_location(location_slug, lat, lon, callback_url):
     """Main function to generate insights for a location"""
@@ -77,69 +66,52 @@ async def generate_insights_for_location(location_slug, lat, lon, callback_url):
             logger.error("AI processing failed")
             return False
         
-        # Fetch category mapping from backend
-        category_map = get_categories_map(callback_url)
-        logger.info(f"Retrieved categories: {list(category_map.keys())}")
+        # Clean the summary if it exists
+        if 'summary' in insights_result:
+            clean_summary = clean_text(insights_result['summary'])
+            if clean_summary:
+                insights_result['summary'] = clean_summary
         
-        # Clean the summary
-        clean_summary = clean_text(insights_result.get('summary', ''))
-        if not clean_summary:
-            logger.error("No valid summary generated")
-            return False
-        
-        # Transform insights to array format with UUIDs - exactly as backend expects
-        insights_array = []
+        # Clean text in insights if they exist
         if 'insights' in insights_result:
             for category_slug, category_insights in insights_result['insights'].items():
-                category_id = category_map.get(category_slug)
-                if not category_id:
-                    logger.warning(f"Category '{category_slug}' not found in backend")
-                    continue
-                
                 for insight in category_insights:
-                    # Generate a UUID for each insight
-                    insight_id = str(uuid.uuid4())
+                    if 'title' in insight:
+                        clean_title = clean_text(insight['title'])
+                        if clean_title:
+                            insight['title'] = clean_title
                     
-                    # Clean all text fields - ensure ASCII only
-                    clean_title = clean_text(insight.get('title', ''))
-                    clean_summary_text = clean_text(insight.get('summary', ''))
-                    clean_status_tag = clean_text(insight.get('status_tag'))
+                    if 'summary' in insight:
+                        clean_summary_text = clean_text(insight['summary'])
+                        if clean_summary_text:
+                            insight['summary'] = clean_summary_text
                     
-                    if clean_title and clean_summary_text:
-                        insights_array.append({
-                            "id": insight_id,
-                            "category_id": str(category_id),  # Ensure string
-                            "title": clean_title,
-                            "summary": clean_summary_text,
-                            "status_tag": clean_status_tag,
-                            "source_type": "ai",
-                            "cheers": 0,  # Add default values backend expects
-                            "boos": 0
-                        })
+                    if 'status_tag' in insight and insight['status_tag']:
+                        clean_status_tag = clean_text(insight['status_tag'])
+                        if clean_status_tag:
+                            insight['status_tag'] = clean_status_tag
         
-        # Build the exact payload structure the backend callback expects
+        # Send RAW OpenAI response without adding IDs or category UUIDs
         callback_payload = {
             "location_slug": str(location_slug),
-            "summary": clean_summary,
             "lat": float(lat),
             "lon": float(lon),
-            "categories": {},  # Backend expects this field
-            "insights": insights_array
+            "raw_ai_response": insights_result  # Raw OpenAI JSON response
         }
         
         # Debug output
-        print("=== Sending to Backend ===")
+        print("=== Sending RAW AI Response to Backend ===")
         print(json.dumps(callback_payload, indent=2, ensure_ascii=True))
         print("=== End Data ===")
         
-        # Use the exact same approach as requests would for JSON
-        # This ensures the Content-Type and encoding are exactly right
+        # Send request to backend callback
         try:
             response = requests.post(
                 f"{callback_url}/insights/callback",
                 json=callback_payload,  # Let requests handle JSON serialization
                 headers={
-                    'User-Agent': 'InsightWorker/1.0'
+                    'User-Agent': 'InsightWorker/1.0',
+                    'Content-Type': 'application/json'
                 },
                 timeout=60
             )
@@ -158,7 +130,7 @@ async def generate_insights_for_location(location_slug, lat, lon, callback_url):
         print("=== End Response ===")
         
         if response.status_code == 200:
-            logger.info(f"Successfully sent insights for {location_slug}")
+            logger.info(f"Successfully sent raw AI response for {location_slug}")
             return True
         else:
             logger.error(f"Callback failed: {response.status_code} - {response.text}")
@@ -170,15 +142,17 @@ async def generate_insights_for_location(location_slug, lat, lon, callback_url):
         traceback.print_exc()
         return False
 
+
 if __name__ == "__main__":
     if len(sys.argv) != 5:
         print("Usage: python main.py <location_slug> <lat> <lon> <callback_url>")
         sys.exit(1)
     
-    location_slug = sys.argv[1]
-    lat = float(sys.argv[2])
-    lon = float(sys.argv[3])
-    callback_url = sys.argv[4]
+    # Fix: Use correct indices for command line arguments
+    location_slug = sys.argv[1]  # Changed from sys.argv[21] to sys.argv[1]
+    lat = float(sys.argv[2])     # Changed from sys.argv[22] to sys.argv[2]
+    lon = float(sys.argv[3])     # Changed from sys.argv[23] to sys.argv[3]
+    callback_url = sys.argv[4]   # Changed from sys.argv[24] to sys.argv[4]
     
     success = asyncio.run(generate_insights_for_location(location_slug, lat, lon, callback_url))
     sys.exit(0 if success else 1)

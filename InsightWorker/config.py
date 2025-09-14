@@ -2,15 +2,15 @@
 
 class Config:
     # Database
-    PG_HOST = "PG_HOST"
+    PG_HOST = "host" 
     PG_PORT = 5432
-    PG_USER = "User" 
-    PG_PASSWORD = "Password"
-    PG_DATABASE = "DB_NAME"
+    PG_USER = "postgres" 
+    PG_PASSWORD = "pass"
+    PG_DATABASE = "postgres"
     
     # APIs
-    OPENAI_API_KEY = "openAIkey"  # You need to get this from OpenAI
-    GOOGLE_PLACES_API_KEY = "googlekey"
+    OPENAI_API_KEY = "openAPIkey"  # You need to get this from OpenAI
+    GOOGLE_PLACES_API_KEY = "apikey"
     
     # Logging
     LOG_LEVEL = "INFO"
