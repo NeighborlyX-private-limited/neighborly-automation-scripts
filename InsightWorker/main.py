@@ -52,7 +52,7 @@ def clean_text(text):
     return cleaned.encode('ascii', 'ignore').decode('ascii').strip() if cleaned.strip() else None
 
 
-async def generate_insights_for_location(location_slug, lat, lon, callback_url):
+async def generate_insights_for_location(location_slug, lat, lon):
     """Main function to generate insights for a location"""
     try:
         logger.info(f"Starting insights generation for {location_slug}")
@@ -108,7 +108,7 @@ async def generate_insights_for_location(location_slug, lat, lon, callback_url):
         # Send request to backend callback
         try:
             response = requests.post(
-                f"{callback_url}/insights/callback",
+                "http://localhost:5000/insights/callback",
                 json=callback_payload,  # Let requests handle JSON serialization
                 headers={
                     'User-Agent': 'InsightWorker/1.0',
@@ -145,15 +145,14 @@ async def generate_insights_for_location(location_slug, lat, lon, callback_url):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 5:
-        print("Usage: python main.py <location_slug> <lat> <lon> <callback_url>")
+    if len(sys.argv) != 4:
+        print("Usage: python main.py <location_slug> <lat> <lon>")
         sys.exit(1)
     
     # Fix: Use correct indices for command line arguments
     location_slug = sys.argv[1]  # Changed from sys.argv[21] to sys.argv[1]
     lat = float(sys.argv[2])     # Changed from sys.argv[22] to sys.argv[2]
     lon = float(sys.argv[3])     # Changed from sys.argv[23] to sys.argv[3]
-    callback_url = sys.argv[4]   # Changed from sys.argv[24] to sys.argv[4]
     
-    success = asyncio.run(generate_insights_for_location(location_slug, lat, lon, callback_url))
+    success = asyncio.run(generate_insights_for_location(location_slug, lat, lon))
     sys.exit(0 if success else 1)
