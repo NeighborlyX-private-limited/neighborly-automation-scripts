@@ -29,8 +29,14 @@ def worker_task(location_slug, lat, lon, callback_url, log_capture):
     sys.stderr = log_capture
     
     try:
-        # Run the async function
-        asyncio.run(generate_insights_for_location(location_slug, lat, lon, callback_url))
+        # Create new event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            # Run the async function
+            loop.run_until_complete(generate_insights_for_location(location_slug, lat, lon, callback_url))
+        finally:
+            loop.close()
     except Exception as e:
         logger.error(f"Error in worker_task for {location_slug}: {e}")
     finally:
