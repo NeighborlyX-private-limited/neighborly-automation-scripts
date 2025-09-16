@@ -6,6 +6,7 @@ import logging
 import re
 from ai_processor import AIProcessor
 from config import Config
+from constants import DEBUG_LABELS
 
 
 logging.basicConfig(level=logging.INFO)
@@ -100,9 +101,9 @@ async def generate_insights_for_location(location_slug, lat, lon, callback_url):
         }
         
         # Debug output
-        print("=== Sending RAW AI Response to Backend ===")
+        print(DEBUG_LABELS["SENDING_RAW_AI_RESPONSE"])
         print(json.dumps(callback_payload, indent=2, ensure_ascii=True))
-        print("=== End Data ===")
+        print(DEBUG_LABELS["END_DATA"])
         
         # Send request to backend callback
         try:
@@ -123,11 +124,11 @@ async def generate_insights_for_location(location_slug, lat, lon, callback_url):
             return False
         
         # Debug backend response
-        print("=== Backend Response ===")
+        print(DEBUG_LABELS["BACKEND_RESPONSE"])
         print("Status:", response.status_code)
         print("Headers:", dict(response.headers))
         print("Response:", response.text)
-        print("=== End Response ===")
+        print(DEBUG_LABELS["END_RESPONSE"])
         
         if response.status_code == 200:
             logger.info(f"Successfully sent raw AI response for {location_slug}")

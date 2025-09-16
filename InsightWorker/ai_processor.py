@@ -9,6 +9,13 @@ from config import Config
 import re
 from datetime import datetime, timedelta
 import urllib.parse
+from constants import (
+    CategoryType, SourceType, StatusTag,
+    CATEGORY_DEFINITIONS, REDDIT_QUERIES, GOOGLE_PLACES_QUERIES,
+    REDDIT_CONFIG, GOOGLE_PLACES_CONFIG, OPENAI_CONFIG, TEXT_CONFIG,
+    RELEVANCE_KEYWORDS, REQUIRED_CATEGORIES, SYSTEM_PROMPTS,
+    JSON_RESPONSE_TEMPLATE, ERROR_MESSAGES, DEBUG_LABELS
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,23 +25,9 @@ class AIProcessor:
         self.config = Config()
         openai.api_key = self.config.OPENAI_API_KEY
         
-        # Updated categories mapping with clarified definitions
-        self.categories = {
-            "food": "Food establishments, restaurants, street food, cafes, bakeries",
-            "social": "Hangout spots, community spaces, parks, libraries, recreational areas (NOT schools or colleges)",
-            "rentals": "Housing, rental prices, accommodation options, PG, flats",
-            "nightlife": "Bars, clubs, pubs exclusively (NOT general entertainment)",
-            "misc": "Infrastructure, civic issues, transportation, markets, shopping, schools, colleges, hospitals, temples"
-        }
-        
-        # Reddit search configurations
-        self.reddit_queries = {
-            "food": ["restaurant", "food", "cafe", "street food", "where to eat"],
-            "social": ["hangout", "places to visit", "parks", "activities", "weekend"],
-            "rentals": ["rent", "rental", "accommodation", "PG", "flat", "housing"],
-            "nightlife": ["bars", "clubs", "nightlife", "party", "drinks"],
-            "misc": ["living in", "infrastructure", "transport", "connectivity", "hospitals", "schools"]
-        }
+        # Use constants for categories and queries
+        self.categories = CATEGORY_DEFINITIONS
+        self.reddit_queries = REDDIT_QUERIES
     
     async def generate_insights(self, location_slug: str, lat: float, lon: float) -> Optional[Dict]:
         try:
@@ -63,20 +56,14 @@ class AIProcessor:
     
     async def _fetch_reddit_data(self, location_slug: str) -> Dict:
         """Fetch relevant Reddit posts and comments for the location"""
-        reddit_data = {
-            "food": [],
-            "social": [],
-            "rentals": [],
-            "nightlife": [],
-            "misc": []
-        }
+        reddit_data = {category.value: [] for category in CategoryType}
         
         try:
             ssl_context = ssl.create_default_context(cafile=certifi.where())
             async with aiohttp.ClientSession() as session:
                 # Set headers to mimic a browser request
                 headers = {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    'User-Agent': REDDIT_CONFIG['USER_AGENT']
                 }
                 
                 tasks = []
@@ -105,7 +92,7 @@ class AIProcessor:
         try:
             # Use Reddit's JSON API
             encoded_query = urllib.parse.quote(query)
-            url = f"https://www.reddit.com/search.json?q={encoded_query}&sort=relevance&t=year&limit=10"
+            url = f"{REDDIT_CONFIG['BASE_URL']}?q={encoded_query}&sort={REDDIT_CONFIG['SORT']}&t={REDDIT_CONFIG['TIME_FILTER']}&limit={REDDIT_CONFIG['LIMIT']}"
             
             async with session.get(url, headers=headers, ssl=ssl_context) as response:
                 if response.status == 200:
@@ -116,12 +103,12 @@ class AIProcessor:
                         post_data = post.get("data", {})
                         
                         # Filter for relevance and quality
-                        if (post_data.get("score", 0) > 5 and 
-                            post_data.get("num_comments", 0) > 2):
+                        if (post_data.get("score", 0) > REDDIT_CONFIG["MIN_SCORE"] and 
+                            post_data.get("num_comments", 0) > REDDIT_CONFIG["MIN_COMMENTS"]):
                             
                             post_info = {
                                 "title": post_data.get("title", ""),
-                                "selftext": post_data.get("selftext", "")[:500],  # Truncate long text
+                                "selftext": post_data.get("selftext", "")[:TEXT_CONFIG["MAX_SELFTEXT_LENGTH"]],  # Truncate long text
                                 "score": post_data.get("score", 0),
                                 "num_comments": post_data.get("num_comments", 0),
                                 "subreddit": post_data.get("subreddit", ""),
@@ -134,7 +121,7 @@ class AIProcessor:
                             if self._is_relevant_post(post_info, category, query):
                                 posts.append(post_info)
                     
-                    return (category, posts[:3])  # Limit to top 3 per query
+                    return (category, posts[:REDDIT_CONFIG["MAX_POSTS_PER_QUERY"]])  # Limit to top 3 per query
                 else:
                     logger.warning(f"Reddit API returned status {response.status} for query: {query}")
                     
@@ -150,23 +137,13 @@ class AIProcessor:
         combined_text = f"{title} {text}"
         
         # Basic relevance checks
-        if len(combined_text) < 20:  # Too short
+        if len(combined_text) < TEXT_CONFIG["MIN_RELEVANT_TEXT_LENGTH"]:  # Too short
             return False
             
-        # Category-specific filtering
-        if category == "food":
-            food_keywords = ["restaurant", "food", "eat", "cafe", "dining", "cuisine"]
-            return any(keyword in combined_text for keyword in food_keywords)
-        elif category == "rentals":
-            rental_keywords = ["rent", "rental", "accommodation", "flat", "apartment", "housing", "pg"]
-            return any(keyword in combined_text for keyword in rental_keywords)
-        elif category == "nightlife":
-            night_keywords = ["bar", "club", "nightlife", "party", "drinks", "pub"]
-            return any(keyword in combined_text for keyword in night_keywords)
-        elif category == "social":
-            social_keywords = ["hangout", "visit", "places", "activities", "fun", "weekend"]
-            return any(keyword in combined_text for keyword in social_keywords)
-        elif category == "misc":
+        # Category-specific filtering using constants
+        if category in RELEVANCE_KEYWORDS:
+            return any(keyword in combined_text for keyword in RELEVANCE_KEYWORDS[category])
+        elif category == CategoryType.MISC.value:
             return True  # More lenient for misc category
             
         return True
@@ -182,15 +159,8 @@ class AIProcessor:
             "transit": []
         }
         
-        # Define search queries for different categories with updated definitions
-        search_queries = [
-            ("restaurant|food|cafe|bakery", "restaurants"),
-            ("park|library|community_center|recreational", "hangout_spots"), 
-            ("hospital|clinic|pharmacy|doctor|school|college|university|temple", "infrastructure"),
-            ("shopping_mall|market|store|atm|bank", "shopping"),
-            ("bar|club|pub|lounge", "nightlife"),
-            ("bus_station|metro_station|taxi_stand", "transit")
-        ]
+        # Use constants for search queries
+        search_queries = GOOGLE_PLACES_QUERIES
         
         try:
             ssl_context = ssl.create_default_context(cafile=certifi.where())
@@ -217,11 +187,11 @@ class AIProcessor:
         """Search Google Places for specific types"""
         try:
             # Google Places Nearby Search API
-            url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+            url = GOOGLE_PLACES_CONFIG["BASE_URL"]
             
             params = {
                 "location": f"{lat},{lon}",
-                "radius": 2000,  # 2km radius
+                "radius": GOOGLE_PLACES_CONFIG["RADIUS"],
                 "type": place_types.split("|")[0],  # Use first type
                 "key": self.config.GOOGLE_PLACES_API_KEY
             }
@@ -231,7 +201,7 @@ class AIProcessor:
                     data = await response.json()
                     
                     places = []
-                    for place in data.get("results", [])[:10]:  # Limit to top 10
+                    for place in data.get("results", [])[:GOOGLE_PLACES_CONFIG["MAX_RESULTS"]]:  # Limit to top 10
                         place_info = {
                             "name": place.get("name"),
                             "rating": place.get("rating", 0),
@@ -261,79 +231,78 @@ class AIProcessor:
         # Add restaurant data
         if places_data.get("restaurants"):
             context_parts.append("\n=== FOOD & RESTAURANTS (Google Places) ===")
-            for place in places_data["restaurants"][:8]:
+            for place in places_data["restaurants"][:TEXT_CONFIG["MAX_RESTAURANTS_DISPLAY"]]:
                 rating_info = f"({place['rating']}⭐, {place['user_ratings_total']} reviews)" if place['rating'] else ""
                 context_parts.append(f"• {place['name']} {rating_info} - {place['vicinity']}")
         
         # Add Reddit food insights
         if reddit_data.get("food"):
             context_parts.append("\n=== FOOD INSIGHTS FROM REDDIT ===")
-            for post in reddit_data["food"][:5]:
+            for post in reddit_data["food"][:REDDIT_CONFIG["MAX_POSTS_PER_CATEGORY"]]:
                 context_parts.append(f"• Reddit Post: {post['title']} (↑{post['score']}, {post['num_comments']} comments)")
                 if post['selftext']:
-                    context_parts.append(f"  Content: {post['selftext'][:200]}...")
+                    context_parts.append(f"  Content: {post['selftext'][:TEXT_CONFIG['MAX_CONTEXT_LENGTH']]}...")
         
         # Add hangout spots (social spaces)
         if places_data.get("hangout_spots"):
             context_parts.append("\n=== HANGOUT SPOTS & SOCIAL SPACES (Google Places) ===")
-            for place in places_data["hangout_spots"][:6]:
+            for place in places_data["hangout_spots"][:TEXT_CONFIG["MAX_HANGOUT_SPOTS_DISPLAY"]]:
                 context_parts.append(f"• {place['name']} - {place['vicinity']}")
         
         # Add Reddit social insights
         if reddit_data.get("social"):
             context_parts.append("\n=== SOCIAL INSIGHTS FROM REDDIT ===")
-            for post in reddit_data["social"][:5]:
+            for post in reddit_data["social"][:REDDIT_CONFIG["MAX_POSTS_PER_CATEGORY"]]:
                 context_parts.append(f"• Reddit Post: {post['title']} (↑{post['score']}, {post['num_comments']} comments)")
                 if post['selftext']:
-                    context_parts.append(f"  Content: {post['selftext'][:200]}...")
+                    context_parts.append(f"  Content: {post['selftext'][:TEXT_CONFIG['MAX_CONTEXT_LENGTH']]}...")
         
         # Add rental insights from Reddit
         if reddit_data.get("rentals"):
             context_parts.append("\n=== RENTAL INSIGHTS FROM REDDIT ===")
-            for post in reddit_data["rentals"][:5]:
+            for post in reddit_data["rentals"][:REDDIT_CONFIG["MAX_POSTS_PER_CATEGORY"]]:
                 context_parts.append(f"• Reddit Post: {post['title']} (↑{post['score']}, {post['num_comments']} comments)")
                 if post['selftext']:
-                    context_parts.append(f"  Content: {post['selftext'][:200]}...")
+                    context_parts.append(f"  Content: {post['selftext'][:TEXT_CONFIG['MAX_CONTEXT_LENGTH']]}...")
         
         # Add infrastructure (schools, hospitals, temples)
         if places_data.get("infrastructure"):
             context_parts.append("\n=== INFRASTRUCTURE & INSTITUTIONS ===")
-            for place in places_data["infrastructure"][:6]:
+            for place in places_data["infrastructure"][:TEXT_CONFIG["MAX_INFRASTRUCTURE_DISPLAY"]]:
                 context_parts.append(f"• {place['name']} - {place['vicinity']}")
         
         # Add shopping
         if places_data.get("shopping"):
             context_parts.append("\n=== SHOPPING & SERVICES ===")
-            for place in places_data["shopping"][:6]:
+            for place in places_data["shopping"][:TEXT_CONFIG["MAX_SHOPPING_DISPLAY"]]:
                 context_parts.append(f"• {place['name']} - {place['vicinity']}")
         
         # Add nightlife (bars/clubs only)
         if places_data.get("nightlife"):
             context_parts.append("\n=== NIGHTLIFE (BARS & CLUBS) ===")
-            for place in places_data["nightlife"][:5]:
+            for place in places_data["nightlife"][:TEXT_CONFIG["MAX_NIGHTLIFE_DISPLAY"]]:
                 context_parts.append(f"• {place['name']} - {place['vicinity']}")
         
         # Add Reddit nightlife insights
         if reddit_data.get("nightlife"):
             context_parts.append("\n=== NIGHTLIFE INSIGHTS FROM REDDIT ===")
-            for post in reddit_data["nightlife"][:3]:
+            for post in reddit_data["nightlife"][:TEXT_CONFIG["MAX_MISC_REDDIT_DISPLAY"]]:
                 context_parts.append(f"• Reddit Post: {post['title']} (↑{post['score']}, {post['num_comments']} comments)")
                 if post['selftext']:
-                    context_parts.append(f"  Content: {post['selftext'][:200]}...")
+                    context_parts.append(f"  Content: {post['selftext'][:TEXT_CONFIG['MAX_CONTEXT_LENGTH']]}...")
         
         # Add Reddit misc insights
         if reddit_data.get("misc"):
             context_parts.append("\n=== GENERAL INSIGHTS FROM REDDIT ===")
-            for post in reddit_data["misc"][:3]:
+            for post in reddit_data["misc"][:TEXT_CONFIG["MAX_MISC_REDDIT_DISPLAY"]]:
                 context_parts.append(f"• Reddit Post: {post['title']} (↑{post['score']}, {post['num_comments']} comments)")
                 if post['selftext']:
-                    context_parts.append(f"  Content: {post['selftext'][:200]}...")
+                    context_parts.append(f"  Content: {post['selftext'][:TEXT_CONFIG['MAX_CONTEXT_LENGTH']]}...")
         
         context = "\n".join(context_parts)
         
         return f"""
-You are a local area expert analyzing real business data from Google Places and community insights from Reddit for {location_slug}. 
-Based on the comprehensive data below, generate insights about this locality.
+SYSTEM_PROMPTS["LOCATION_EXPERT"].format(location_slug=location_slug)
 
 {context}
 
@@ -345,36 +314,36 @@ Generate a comprehensive JSON response with this structure:
       {{
         "title": "Restaurant/Food Place Name or insight from Reddit",
         "summary": "Brief description highlighting what makes it notable (cuisine, popularity, etc.) or community opinion",
-        "status_tag": "Popular",
-        "source_type": "ai"
+        "status_tag": StatusTag.POPULAR.value,
+        "source_type": SourceType.AI.value
       }}
     ],
     "social": [
       {{
         "title": "Park/Library/Community Space/Hangout Spot Name or Reddit insight", 
         "summary": "Description of the hangout spot and why it's good for socializing (NOT schools or colleges)",
-        "source_type": "ai"
+        "source_type": SourceType.AI.value
       }}
     ],
     "rentals": [
       {{
         "title": "Housing/Area insight based on location characteristics or Reddit discussions",
         "summary": "General rental market insights based on area amenities, connectivity, and community discussions",
-        "source_type": "ai"
+        "source_type": SourceType.AI.value
       }}
     ],
     "nightlife": [
       {{
         "title": "Bar/Club/Pub Name or Reddit nightlife insight",
         "summary": "Brief description of the bar/club and its atmosphere or community recommendations (ONLY bars, clubs, pubs)",
-        "source_type": "ai"
+        "source_type": SourceType.AI.value
       }}
     ],
     "misc": [
       {{
         "title": "Infrastructure/Transportation/Shopping/School/Hospital insight",
         "summary": "Notable infrastructure, connectivity, civic amenities, educational institutions, healthcare, or community concerns",
-        "source_type": "ai"
+        "source_type": SourceType.AI.value
       }}
     ]
   }}
@@ -403,28 +372,25 @@ IMPORTANT RULES:
             
             # MUST instruct model to return JSON when using response_format json_object
             response = await client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=OPENAI_CONFIG["MODEL"],
                 messages=[
                     {
                         "role": "system", 
-                        "content": (
-                            "You are a local area expert who analyzes business data and community insights to provide accurate locality insights. "
-                            "Always respond ONLY in valid JSON format, nothing else."
-                        )
+                        "content": SYSTEM_PROMPTS["MAIN"]
                     },
                     {"role": "user", "content": prompt + "\n\nReturn output strictly in JSON format."}
                 ],
-                max_tokens=3000,  # Increased for more comprehensive responses
-                temperature=0.2,
-                response_format={"type": "json_object"}
+                max_tokens=OPENAI_CONFIG["MAX_TOKENS"],
+                temperature=OPENAI_CONFIG["TEMPERATURE"],
+                response_format=OPENAI_CONFIG["RESPONSE_FORMAT"]
             )
             
             raw_response = response.choices[0].message.content.strip()
             
             # DEBUG LOGGING
-            print("=== OpenAI Raw Response ===")
+            print(DEBUG_LABELS["OPENAI_RAW_RESPONSE"])
             print(raw_response)
-            print("=== End Response ===")
+            print(DEBUG_LABELS["END_RESPONSE"])
             
             return raw_response
             
@@ -446,16 +412,15 @@ IMPORTANT RULES:
             
             # Validate required structure
             if "summary" not in parsed or "insights" not in parsed:
-                logger.error("Invalid AI response structure - missing summary or insights")
-                print("=== INVALID STRUCTURE ===")
+                logger.error(ERROR_MESSAGES["MISSING_SUMMARY_OR_INSIGHTS"])
+                print(DEBUG_LABELS["INVALID_STRUCTURE"])
                 print("Parsed response:", parsed)
                 return None
             
             # Ensure all categories exist (even if empty)
-            required_categories = ["food", "social", "rentals", "nightlife", "misc"]
             insights = parsed["insights"]
             
-            for category in required_categories:
+            for category in REQUIRED_CATEGORIES:
                 if category not in insights:
                     insights[category] = []
             
@@ -477,10 +442,10 @@ IMPORTANT RULES:
             return parsed
             
         except json.JSONDecodeError as e:
-            logger.error(f"JSON parsing error: {str(e)}")
-            print("=== JSON PARSE ERROR ===")
+            logger.error(f"{ERROR_MESSAGES['JSON_PARSE_ERROR']}: {str(e)}")
+            print(DEBUG_LABELS["JSON_PARSE_ERROR"])
             print("Raw response that failed:", response[:1000])
             return None
         except Exception as e:
-            logger.error(f"Error parsing AI response: {str(e)}")
+            logger.error(f"{ERROR_MESSAGES['JSON_PARSE_ERROR']}: {str(e)}")
             return None
