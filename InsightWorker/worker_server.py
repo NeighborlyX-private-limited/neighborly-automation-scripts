@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 # The URL of the main application's callback endpoint
-CALLBACK_URL = "http://localhost:5000"
+CALLBACK_URL = "https://prod.neighborly.in/api"
 
 def worker_task(location_slug, lat, lon, callback_url, log_capture):
     """
