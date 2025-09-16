@@ -4,6 +4,7 @@ import requests
 import json
 import logging
 import re
+import os
 from ai_processor import AIProcessor
 from config import Config
 from constants import DEBUG_LABELS
@@ -11,6 +12,9 @@ from constants import DEBUG_LABELS
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Read callback URL from environment; fall back to localhost for dev
+CALLBACK_URL = os.getenv("CALLBACK_URL", "http://localhost:5000/insights/callback")
 
 
 def clean_text(text):
@@ -108,7 +112,7 @@ async def generate_insights_for_location(location_slug, lat, lon):
         # Send request to backend callback
         try:
             response = requests.post(
-                "http://localhost:5000/insights/callback",
+                CALLBACK_URL,
                 json=callback_payload,  # Let requests handle JSON serialization
                 headers={
                     'User-Agent': 'InsightWorker/1.0',

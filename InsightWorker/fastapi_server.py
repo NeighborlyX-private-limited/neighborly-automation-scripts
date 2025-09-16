@@ -24,7 +24,7 @@ app = FastAPI(
 )
 
 # The URL of the main application's callback endpoint
-CALLBACK_URL = "http://localhost:5000"
+CALLBACK_URL = "https://prod.neighborly.in/api"
 
 class InsightRequest(BaseModel):
     location_slug: str
