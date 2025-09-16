@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # The URL of the main application's callback endpoint
 CALLBACK_URL = "https://prod.neighborly.in/api"
 
-def worker_task(location_slug, lat, lon, callback_url, log_capture):
+def worker_task(location_slug, lat, lon, log_capture):
     """
     This function runs the async insight generation and captures its output.
     """
@@ -34,7 +34,7 @@ def worker_task(location_slug, lat, lon, callback_url, log_capture):
         asyncio.set_event_loop(loop)
         try:
             # Run the async function
-            loop.run_until_complete(generate_insights_for_location(location_slug, lat, lon, callback_url))
+            loop.run_until_complete(generate_insights_for_location(location_slug, lat, lon))
         finally:
             loop.close()
     except Exception as e:
@@ -66,7 +66,7 @@ def generate_insights():
         # Start the worker task in a new thread
         worker_thread = threading.Thread(
             target=worker_task,
-            args=(location_slug, lat, lon, CALLBACK_URL, log_capture)
+            args=(location_slug, lat, lon, log_capture)
         )
         worker_thread.start()
 

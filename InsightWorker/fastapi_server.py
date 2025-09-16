@@ -68,8 +68,7 @@ async def generate_insights(request: InsightRequest, background_tasks: Backgroun
             generate_insights_for_location,
             request.location_slug,
             request.lat,
-            request.lon,
-            callback_url
+            request.lon
         )
         
         logger.info(f"Background task started for {request.location_slug}")
@@ -100,8 +99,7 @@ async def generate_insights_sync(request: InsightRequest):
         success = await generate_insights_for_location(
             request.location_slug,
             request.lat,
-            request.lon,
-            callback_url
+            request.lon
         )
         
         if success:
